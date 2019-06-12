@@ -79,13 +79,16 @@ RECEIVED_COMPILED_LIST = [
 
 EPILOGUE_DEFECTS = {"StartBoundaryNotFoundDefect"}
 
-ADDRESSES_HEADERS = set([
+ADDRESSES_HEADERS = set((
     "bcc",
     "cc",
     "delivered-to",
     "from",
     "reply-to",
-    "to"])
+    "to",
+    "sender",
+    "return-path",
+))
 
 # These parts are always returned
 OTHERS_PARTS = set([
