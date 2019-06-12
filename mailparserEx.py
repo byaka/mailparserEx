@@ -22,9 +22,14 @@ import email
 import logging
 import os
 
-import ipaddress
 import six
-import simplejson as json
+
+try: import ipaddress
+except ImportError:
+    global ipaddress
+    ipaddress=None
+try: import simplejson as json
+except ImportError: import json
 
 from .const import (
     ADDRESSES_HEADERS,
@@ -439,6 +444,8 @@ class MailParserEx(object):
         Returns:
             string with the ip address
         """
+        if ipaddress is None:
+            raise NotImplementedError('Missed module `ipaddress`')
         log.debug("Trust string is {!r}".format(trust))
 
         if not trust.strip():
