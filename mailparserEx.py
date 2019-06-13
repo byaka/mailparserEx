@@ -21,6 +21,7 @@ from __future__ import unicode_literals
 import email
 import logging
 import os
+from collections import defaultdict
 
 import six
 
@@ -69,6 +70,7 @@ class DefectCustom_AttachmentWithoutName(DefectCustomBase):
     _infoTpl='Processed attachment is not text-part, but no filename finded, so attachment skipped:\n%(headers)s'
     contentType='Attachment'
 
+logging.basicConfig(filename='/dev/null',level=logging.WARNING)
 log = logging.getLogger(__name__)
 
 def parse_from_file_obj(fp):
@@ -267,8 +269,7 @@ class MailParserEx(object):
         self._attachments = []
         self._text_plain = []
         self._text_html = []
-        self._defects = []
-        self._defects_categories = set()
+        self._defects = defaultdict(list)
         self._has_defects = False
 
     def _append_defects(self, part, part_content_type=None, asCustom=False):
@@ -284,26 +285,23 @@ class MailParserEx(object):
             asCustom (bool): is custom defect passed to first arg
         """
 
-        part_defects = {}
+        hasDefects=False
         if asCustom:
             part_content_type=part_content_type or part.contentType
             defects = "{}: {}".format(*part())
-            self._defects_categories.add(part.category)
-            part_defects.setdefault(part_content_type, []).append(defects)
+            self._defects[part.category].append(defects)
             log.debug("Added defect {!r}".format(defects))
+            hasDefects=True
         else:
             for e in part.defects:
                 defects = "{}: {}".format(e.__class__.__name__, e.__doc__)
-                self._defects_categories.add(e.__class__.__name__)
-                part_defects.setdefault(part_content_type, []).append(defects)
+                self._defects[e.__class__.__name__].append(defects)
                 log.debug("Added defect {!r}".format(defects))
+                hasDefects=True
 
         # Tag mail with defect
-        if part_defects:
+        if hasDefects:
             self._has_defects = True
-
-            # Save all defects
-            self._defects.append(part_defects)
 
     def _make_mail(self, complete=True):
         """
@@ -331,7 +329,7 @@ class MailParserEx(object):
         mail["has_defects"] = self.has_defects
         if self.has_defects:
             mail["defects"] = self.defects
-            mail["defects_categories"] = list(self.defects_categories)
+            mail["defects_categories"] = self.defects.keys()
 
         return mail
 
@@ -357,7 +355,7 @@ class MailParserEx(object):
             parts.append(p)
 
         # If defects are in epilogue defects get epilogue
-        if self.defects_categories & EPILOGUE_DEFECTS:
+        if EPILOGUE_DEFECTS in self.defects_categories:
             log.debug("Found defects in emails")
             epilogue = find_between(
                 self.message.epilogue,
@@ -425,7 +423,6 @@ class MailParserEx(object):
                         "charset": charset_raw,
                         "content_transfer_encoding": transfer_encoding})
                 else:
-                    #? неуверен, что это корректно - у инлайнового аттачмента может не быть имени
                     log.debug("Email part {!r} is not an attachment".format(i))
                     payload = ported_string(
                         p.get_payload(decode=True), encoding=charset)
@@ -434,8 +431,8 @@ class MailParserEx(object):
                             self._text_html.append(payload)
                         else:
                             self._text_plain.append(payload)
-                    else:
-                        self._append_defects(DefectCustom_AttachmentWithoutName(headers=p.items()), asCustom=True)
+                    # else:
+                    #     self._append_defects(DefectCustom_AttachmentWithoutName(headers=p.items()), asCustom=True)
 
         else:
             # Parsed object mail with all parts
@@ -681,7 +678,7 @@ class MailParserEx(object):
         """
         Return a set with only defects categories.
         """
-        return self._defects_categories
+        return self._defects
 
     @property
     def has_defects(self):

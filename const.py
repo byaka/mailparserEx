@@ -77,7 +77,7 @@ RECEIVED_PATTERNS = [
 RECEIVED_COMPILED_LIST = [
     re.compile(i, re.I | re.DOTALL) for i in RECEIVED_PATTERNS]
 
-EPILOGUE_DEFECTS = {"StartBoundaryNotFoundDefect"}
+EPILOGUE_DEFECTS = "StartBoundaryNotFoundDefect"
 
 ADDRESSES_HEADERS = set((
     "bcc",
