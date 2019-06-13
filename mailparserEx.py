@@ -51,6 +51,10 @@ from .utils import (
 
 from .exceptions import MailParserExEnvironmentError
 
+DEFECT_AttachmentWithoutName=(
+    'mailparserExAttachmentWithoutName',
+    'Processed attachment not text part but no filename finded, so attachment skipped'
+)
 
 log = logging.getLogger(__name__)
 
@@ -255,7 +259,7 @@ class MailParserEx(object):
         self._defects_categories = set()
         self._has_defects = False
 
-    def _append_defects(self, part, part_content_type):
+    def _append_defects(self, part, part_content_type, asCustom=False):
         """
         Add new defects and defects categories to object attributes.
 
@@ -263,17 +267,23 @@ class MailParserEx(object):
         when parsing this message.
 
         Args:
-            part (string): mail part
+            part (string or tuple): mail part or custom defect info. Custom defect must be tuple with first item `name` and second item `descr`.
             part_content_type (string): content type of part
+            asCustom (bool): is custom defect passed to first arg
         """
 
         part_defects = {}
-
-        for e in part.defects:
-            defects = "{}: {}".format(e.__class__.__name__, e.__doc__)
-            self._defects_categories.add(e.__class__.__name__)
+        if asCustom:
+            defects = "{}: {}".format(part)
+            self._defects_categories.add(part[0])
             part_defects.setdefault(part_content_type, []).append(defects)
             log.debug("Added defect {!r}".format(defects))
+        else:
+            for e in part.defects:
+                defects = "{}: {}".format(e.__class__.__name__, e.__doc__)
+                self._defects_categories.add(e.__class__.__name__)
+                part_defects.setdefault(part_content_type, []).append(defects)
+                log.debug("Added defect {!r}".format(defects))
 
         # Tag mail with defect
         if part_defects:
@@ -402,6 +412,7 @@ class MailParserEx(object):
                         "charset": charset_raw,
                         "content_transfer_encoding": transfer_encoding})
                 else:
+                    #? неуверен, что это корректно - у инлайнового аттачмента может не быть имени
                     log.debug("Email part {!r} is not an attachment".format(i))
                     payload = ported_string(
                         p.get_payload(decode=True), encoding=charset)
@@ -410,6 +421,9 @@ class MailParserEx(object):
                             self._text_html.append(payload)
                         else:
                             self._text_plain.append(payload)
+                    else:
+                        self._append_defects(DEFECT_AttachmentWithoutName, 'attachment', asCustom=False)
+
         else:
             # Parsed object mail with all parts
             self._mail = self._make_mail()
@@ -532,14 +546,16 @@ class MailParserEx(object):
     @property
     def body(self):
         """
-        Return all text plain and text html parts of mail delimited from string
-        "--- mail_boundary ---"
+        Return tuple with text plain and text html parts of mail
         """
         return '\n'.join(self.text_plain), '\n'.join(self.text_html)
 
     @property
     def raw(self):
-        return self._message.to_string()
+        """
+        Return raw string for message
+        """
+        return self._message.as_string()
 
     @property
     def headers(self):
