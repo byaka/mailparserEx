@@ -51,13 +51,25 @@ from .utils import (
 
 from .exceptions import MailParserExEnvironmentError
 
-DEFECT_AttachmentWithoutName=(
-    'mailparserExAttachmentWithoutName',
-    'Processed attachment not text part but no filename finded, so attachment skipped'
-)
+class DefectCustomBase(object):
+    _name='Unknown'
+    _infoTpl=''
+    category='Custom'
+    contentType='Unknown'
+
+    def __init__(self, **p):
+        self.name=self._name
+        self.info=self._infoTpl%p
+
+    def __call__(self):
+        return self.name, self.info
+
+class DefectCustom_AttachmentWithoutName(DefectCustomBase):
+    _name='AttachmentWithoutName'
+    _infoTpl='Processed attachment is not text-part, but no filename finded, so attachment skipped:\n%(headers)s'
+    contentType='Attachment'
 
 log = logging.getLogger(__name__)
-
 
 def parse_from_file_obj(fp):
     """
@@ -259,7 +271,7 @@ class MailParserEx(object):
         self._defects_categories = set()
         self._has_defects = False
 
-    def _append_defects(self, part, part_content_type, asCustom=False):
+    def _append_defects(self, part, part_content_type=None, asCustom=False):
         """
         Add new defects and defects categories to object attributes.
 
@@ -268,14 +280,15 @@ class MailParserEx(object):
 
         Args:
             part (string or tuple): mail part or custom defect info. Custom defect must be tuple with first item `name` and second item `descr`.
-            part_content_type (string): content type of part
+            part_content_type (string or none): content type of part
             asCustom (bool): is custom defect passed to first arg
         """
 
         part_defects = {}
         if asCustom:
-            defects = "{}: {}".format(part)
-            self._defects_categories.add(part[0])
+            part_content_type=part_content_type or part.contentType
+            defects = "{}: {}".format(*part())
+            self._defects_categories.add(part.category)
             part_defects.setdefault(part_content_type, []).append(defects)
             log.debug("Added defect {!r}".format(defects))
         else:
@@ -422,7 +435,7 @@ class MailParserEx(object):
                         else:
                             self._text_plain.append(payload)
                     else:
-                        self._append_defects(DEFECT_AttachmentWithoutName, 'attachment', asCustom=False)
+                        self._append_defects(DefectCustom_AttachmentWithoutName(headers=p.items()), asCustom=True)
 
         else:
             # Parsed object mail with all parts
